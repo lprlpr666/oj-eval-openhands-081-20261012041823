@@ -6,7 +6,7 @@
 
 using namespace std;
 
-class MaxFlowSolver {
+class OptimizedMaxFlow {
 private:
     struct Edge {
         int to, cap, rev;
@@ -57,7 +57,7 @@ private:
     }
     
 public:
-    MaxFlowSolver(int n) : n(n) {
+    OptimizedMaxFlow(int n) : n(n) {
         graph.resize(n);
     }
     
@@ -78,7 +78,10 @@ public:
             int f;
             while ((f = dfs(s, t, 1e9)) > 0) {
                 flow += f;
+                // Since degree ≤ 3, max flow is at most 3
+                if (flow >= 3) break;
             }
+            if (flow >= 3) break;
         }
         return flow;
     }
@@ -152,12 +155,12 @@ int main() {
             }
         }
         
-        MaxFlowSolver comp_solver(comp.size());
+        OptimizedMaxFlow solver(comp.size());
         
         // For each pair in component, compute max flow
         for (int i = 0; i < comp.size(); i++) {
             for (int j = i + 1; j < comp.size(); j++) {
-                int flow = comp_solver.max_flow(i, j, comp_edges);
+                int flow = solver.max_flow(i, j, comp_edges);
                 total += flow;
             }
         }
