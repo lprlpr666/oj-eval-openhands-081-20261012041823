@@ -6,86 +6,57 @@
 
 using namespace std;
 
-class OptimizedMaxFlow {
-private:
-    struct Edge {
-        int to, cap, rev;
-    };
+// Simple BFS-based max flow for unit capacity graphs
+int simple_max_flow(int s, int t, const vector<vector<int>>& adj, int n) {
+    if (s == t) return 0;
     
-    vector<vector<Edge>> graph;
-    vector<int> level, iter;
-    int n;
+    int flow = 0;
+    vector<bool> edge_used(n * 3 + 10, false); // generous size for edge marking
     
-    void add_edge(int from, int to, int cap) {
-        graph[from].push_back({to, cap, (int)graph[to].size()});
-        graph[to].push_back({from, 0, (int)graph[from].size() - 1});
-    }
-    
-    bool bfs(int s, int t) {
-        level.assign(n, -1);
+    // Since degree ≤ 3, max flow is at most 3
+    for (int attempt = 0; attempt < 3; attempt++) {
+        vector<int> parent(n, -1);
+        vector<int> edge_idx(n, -1);
         queue<int> q;
-        level[s] = 0;
         q.push(s);
+        parent[s] = s;
         
-        while (!q.empty()) {
+        bool found = false;
+        while (!q.empty() && !found) {
             int v = q.front();
             q.pop();
-            for (auto &e : graph[v]) {
-                if (e.cap > 0 && level[e.to] < 0) {
-                    level[e.to] = level[v] + 1;
-                    q.push(e.to);
+            
+            for (int i = 0; i < adj[v].size() && !found; i++) {
+                int u = adj[v][i];
+                int edge_id = v * 3 + i; // unique edge identifier
+                
+                if (!edge_used[edge_id] && parent[u] == -1) {
+                    parent[u] = v;
+                    edge_idx[u] = edge_id;
+                    if (u == t) {
+                        found = true;
+                        break;
+                    }
+                    q.push(u);
                 }
             }
         }
-        return level[t] >= 0;
-    }
-    
-    int dfs(int v, int t, int f) {
-        if (v == t) return f;
-        for (int &i = iter[v]; i < graph[v].size(); i++) {
-            Edge &e = graph[v][i];
-            if (e.cap > 0 && level[v] < level[e.to]) {
-                int d = dfs(e.to, t, min(f, e.cap));
-                if (d > 0) {
-                    e.cap -= d;
-                    graph[e.to][e.rev].cap += d;
-                    return d;
-                }
-            }
-        }
-        return 0;
-    }
-    
-public:
-    OptimizedMaxFlow(int n) : n(n) {
-        graph.resize(n);
-    }
-    
-    int max_flow(int s, int t, const vector<pair<int, int>>& edges) {
-        // Clear and rebuild graph
-        for (int i = 0; i < n; i++) {
-            graph[i].clear();
+        
+        if (!found) break;
+        
+        // Mark edges along the path as used
+        int curr = t;
+        while (curr != s) {
+            int edge_id = edge_idx[curr];
+            edge_used[edge_id] = true;
+            curr = parent[curr];
         }
         
-        for (auto [u, v] : edges) {
-            add_edge(u, v, 1);
-            add_edge(v, u, 1);
-        }
-        
-        int flow = 0;
-        while (bfs(s, t)) {
-            iter.assign(n, 0);
-            int f;
-            while ((f = dfs(s, t, 1e9)) > 0) {
-                flow += f;
-                // Since degree ≤ 3, max flow is at most 3
-                if (flow >= 3) break;
-            }
-            if (flow >= 3) break;
-        }
-        return flow;
+        flow++;
     }
-};
+    
+    return flow;
+}
 
 int main() {
     ios::sync_with_stdio(false);
@@ -94,14 +65,12 @@ int main() {
     int n, m;
     cin >> n >> m;
     
-    vector<pair<int, int>> edges;
     vector<vector<int>> adj(n);
     
     for (int i = 0; i < m; i++) {
         int a, b;
         cin >> a >> b;
         a--; b--;
-        edges.emplace_back(a, b);
         adj[a].push_back(b);
         adj[b].push_back(a);
     }
@@ -141,26 +110,27 @@ int main() {
     for (auto& comp : components) {
         if (comp.size() <= 1) continue;
         
-        // Map original nodes to component nodes
+        // Build component adjacency
+        vector<vector<int>> comp_adj(comp.size());
         vector<int> node_map(n, -1);
-        vector<pair<int, int>> comp_edges;
         
         for (int i = 0; i < comp.size(); i++) {
             node_map[comp[i]] = i;
         }
         
-        for (auto [u, v] : edges) {
-            if (node_map[u] != -1 && node_map[v] != -1) {
-                comp_edges.emplace_back(node_map[u], node_map[v]);
+        for (int original_node : comp) {
+            int new_node = node_map[original_node];
+            for (int neighbor : adj[original_node]) {
+                if (node_map[neighbor] != -1) {
+                    comp_adj[new_node].push_back(node_map[neighbor]);
+                }
             }
         }
-        
-        OptimizedMaxFlow solver(comp.size());
         
         // For each pair in component, compute max flow
         for (int i = 0; i < comp.size(); i++) {
             for (int j = i + 1; j < comp.size(); j++) {
-                int flow = solver.max_flow(i, j, comp_edges);
+                int flow = simple_max_flow(i, j, comp_adj, comp.size());
                 total += flow;
             }
         }
